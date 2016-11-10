@@ -1,0 +1,8 @@
+#include <TreeNode.h>
+#include <prune.h>
+
+using namespace std;
+
+TreeNode * prune(TreeNode * decision_tree){
+
+}
