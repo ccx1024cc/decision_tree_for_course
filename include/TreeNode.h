@@ -9,7 +9,9 @@ class TreeNode
     public:
         TreeNode(string split_attr,float split_value);
         TreeNode(TreeNode * node);
+        TreeNode(int id_on_disk);
         virtual ~TreeNode();
+        int save_on_disk();
 
         string split_attr;
         float split_value;
@@ -22,6 +24,10 @@ class TreeNode
         double rt_subtree;  // 子树误差
         int number_leaf;  // 叶子节点个数
         double a;  //表面误差率增益
+
+        int left_child_id_on_disk;//数据库中的ID
+        int right_child_id_on_disk;
+        int id_on_disk;
     protected:
 
     private:

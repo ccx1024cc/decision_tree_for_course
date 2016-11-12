@@ -7,6 +7,7 @@
 #include <utility.h>
 #include <math.h>
 #include <predict.h>
+#include <limits.h>
 
 TreeNode * prune(TreeNode * decision_tree){
   list<TreeNode *> tree_set;  //剪枝后的数集合
@@ -76,7 +77,7 @@ void tree_delete(TreeNode * & sub_tree){
 
 TreeNode * choose_best_tree(list<TreeNode *> tree_set){
   list<TreeNode *> chosen_history;
-  for(int i=0;i<10;i++){
+  for(int i=0;i<1;i++){
     list<int> error; // 每一个树分错数量的集合
     list<int> ids = generate_random_data(0.1);  // 只用十分之一的局部数据进行剪枝测试
     DB * db_helper = new DB();
@@ -105,7 +106,7 @@ TreeNode * choose_best_tree(list<TreeNode *> tree_set){
     float se = sqrt(min_number_error * (total - min_number_error) / total);
 
     TreeNode * best_tree;
-    int min_number_leaf = 3000;
+    int min_number_leaf = INT_MAX;
     list<int>::iterator iter_error = error.begin();
     for(list<TreeNode *>::iterator iter_tree = tree_set.begin()
                       ;iter_error != error.end(); ++iter_error,++iter_tree){
@@ -132,7 +133,7 @@ TreeNode * choose_best_tree(list<TreeNode *> tree_set){
   TreeNode * best_tree;
   list<int>::iterator iter_chosen_time = chosen_times.begin();
   for(list<TreeNode *>::iterator iter_tree = tree_set.begin();
-     iter_chosen_time != chosen_times.end(); ++iter_chosen_time,++iter_tree){
+    iter_chosen_time != chosen_times.end(); ++iter_chosen_time,++iter_tree){
     if(*iter_chosen_time > max_chosen_time){
       max_chosen_time = *iter_chosen_time;
       best_tree = *iter_tree;

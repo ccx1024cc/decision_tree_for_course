@@ -50,13 +50,13 @@ TreeNode * start_training_process(list<int> & training_data, list<int> attr_inde
   }
 
   //所有数据属于一个类
-  cout << "checking is in same label?" << endl;
+  cout << "checking is in same label" << endl;
   if(is_all_same_label(training_data)){
     DB * db_helper = new DB();
-    string label = db_helper->query_string("select label from training_data where id = "
-                                            + * training_data.begin());
+    string sql = "select label from training_data where id = " + int2string(*training_data.begin());
+    string label = db_helper->query_string(sql);
     delete db_helper;
-    TreeNode * leaf = new TreeNode(0,0);
+    TreeNode * leaf = new TreeNode("",0);
     leaf->label = label;
     leaf->number_leaf = 1;
     leaf->rt = 0;  // 误差为0
@@ -75,12 +75,13 @@ TreeNode * start_training_process(list<int> & training_data, list<int> attr_inde
     cout << "searching the most label" << endl;
 
     DB * db_helper = new DB();
-    string sql = "select label from training_data where id = ";
-    string most_label = db_helper->select_most(sql,training_data);
+    string sql = "select count(label),label from training_data where id in ";
+    string sql_suffix = " group by label";
+    string most_label = db_helper->select_most(sql,training_data,sql_suffix);
 
-    TreeNode * leaf = new TreeNode(0,0);
+    TreeNode * leaf = new TreeNode("",0);
     leaf->label = most_label;
-    sql = "select count(*) from training_data where label != '" + leaf->label + "' and id = ";
+    sql = "select count(*) from training_data where label != '" + leaf->label + "' and id in ";
     int different_label_num = db_helper->select_count(sql,training_data);
     double total = db_helper->select_count("select count(*) from training_data");
     leaf->rt = different_label_num/total;
@@ -102,8 +103,6 @@ TreeNode * start_training_process(list<int> & training_data, list<int> attr_inde
   //计算每个属性的基尼系数，找到分割属性和分割点
   cout << "calculating gini:" << endl;
   for(list<int>::iterator iter = attr_index.begin();iter != attr_index.end();++iter){
-    if(iter == attr_index.begin())
-      continue;
     list<float>  result = calculate_gini(training_data,attr_array[*iter]);
     if(min_gini > result.back()){
       min_gini = result.back();
@@ -111,22 +110,22 @@ TreeNode * start_training_process(list<int> & training_data, list<int> attr_inde
       best_split_value = result.front();
     }
   }
+
+  cout << "-----------------------------------"<<endl;
   cout << "gini compution finished" << endl;
+  cout << "   min gini = "<<double2string(min_gini)<<endl;
 
   //分割训练数据，分割属性
   DB * db_helper = new DB();
   string sql_base = "select id from training_data where " + attr_array[best_attr_index];
-  ostringstream oss;
-  oss << best_split_value;
-  string sql_value = oss.str();
-  oss.str("");
+  string sql_value = double2string(best_split_value);
 
   //如果是标量，则求出真正的值
-  if(best_attr_index == 2){ //protocol_type
+  if(best_attr_index == 1){ //protocol_type
     sql_value = "'" + protocol_array[(int)best_split_value] + "'";
-  }else if(best_attr_index == 3){  //service
+  }else if(best_attr_index == 2){  //service
     sql_value = "'" + service_array[(int)best_split_value] + "'";
-  }else if(best_attr_index == 4){ //flag
+  }else if(best_attr_index == 3){ //flag
     sql_value = "'" + flag_array[(int)best_split_value] + "'";
   }
   cout << "best attribution : " << attr_array[best_attr_index] << endl;
@@ -134,12 +133,11 @@ TreeNode * start_training_process(list<int> & training_data, list<int> attr_inde
 
   //分割数据
   cout << "spliting dataset" << endl;
-  string sql1 = sql_base + " < " + sql_value;
-  string sql2 = sql_base + " >= " + sql_value;
+  string sql1 = sql_base + " < " + sql_value + " and id in ";
+  string sql2 = sql_base + " >= " + sql_value + " and id in ";
   list<int> sub_training_dataset1 = db_helper->query_int_list(sql1,training_data);
   list<int> sub_training_dataset2 = db_helper->query_int_list(sql2,training_data);
   delete db_helper;
-  training_data.clear(); //清空内存
 
   //删除属性
   cout << "deleting attribution " << attr_array[best_attr_index] <<" from attribution set" << endl;
@@ -151,14 +149,15 @@ TreeNode * start_training_process(list<int> & training_data, list<int> attr_inde
   split_node->left_child = start_training_process(sub_training_dataset1,attr_index);
   split_node->right_child = start_training_process(sub_training_dataset2,attr_index);
   cout << "finish tree build at node of attribution " << attr_array[best_attr_index] << endl;
-
+  cout << "*************************************************************************"<<endl;
   cout << "error calculating" << endl;
   //统计误差
   db_helper = new DB();
-  string sql = "select label from training_data where id = ";
-  string most_label = db_helper->select_most(sql,training_data);
+  string sql = "select count(label),label from training_data where id in ";
+  string sql_suffix = " group by label";
+  string most_label = db_helper->select_most(sql,training_data,sql_suffix);
 
-  sql = "select count(*) from training_data where label != '" + most_label + "' and id = ";
+  sql = "select count(*) from training_data where label != '" + most_label + "' and id in ";
   int difference_label_number = db_helper->select_count(sql,training_data);
   double total = db_helper->select_count("select count(*) from training_data");
   delete db_helper;
@@ -171,12 +170,17 @@ TreeNode * start_training_process(list<int> & training_data, list<int> attr_inde
   split_node->number_leaf = 0;
   split_node->number_leaf += split_node->left_child != 0?split_node->left_child->number_leaf:0;
   split_node->number_leaf += split_node->right_child != 0?split_node->right_child->number_leaf:0;
-  split_node->a += (split_node->rt - split_node->rt_subtree)/(split_node->number_leaf - 1);
+  split_node->a = 0;
+  if(split_node->number_leaf == 1){
+    split_node->a += (split_node->rt - split_node->rt_subtree)/(split_node->number_leaf);
+  }else{
+    split_node->a += (split_node->rt - split_node->rt_subtree)/(split_node->number_leaf - 1);
+  }
 
   cout << "error : "<<split_node->rt << endl;
   cout << "error of subtree : " << split_node->rt_subtree<<endl;
   cout << "number of leaf : " <<split_node->number_leaf << endl;
-  cout << " 表面误差增益 : " << split_node->a << endl;
+  cout << "cover error : " << double2string(split_node->a) << endl;
   cout << "return decision-node at attribution: " << split_node->split_attr << endl;
   return split_node;
 }
@@ -215,16 +219,8 @@ list<int> generate_random_data(float factor){
 bool is_all_same_label(list<int> & ids){
   DB * db_helper = new DB();
   string sql = "select distinct label from training_data where id in ";
-  //set<string> label;
-  //for(list<int>::iterator iter_id = ids.begin();iter_id != ids.end();++iter_id){
-  //  string final_sql = sql + int2string(*iter_id);
-  //  label.insert(db_helper->query_string(final_sql));
-  //}
-  //cout << "number of label : " <<label.size()  << endl;
   list<string> label = db_helper->query_string_list(sql,ids);
-  cout << label.size() <<endl;
-  label.unique();
-  cout << "number of label : " <<label.size()  << endl;
+  cout << "   number of label in data set : " <<label.size()  << endl;
   delete db_helper;
   if(label.size() > 1)
     return false;
@@ -233,33 +229,42 @@ bool is_all_same_label(list<int> & ids){
 }
 
 list<float> calculate_gini(list<int> & ids,const string & split_attr){
+  cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"<<endl;
   cout << "  calculate candidate for " << split_attr << endl;
   list<float> result;
   DB * db_helper = new DB();
   float min_gini = 10;
   float best_split_value;  //如果是标量属性，则代表最佳划分值的下标
   if(split_attr == "protocol_type"){
+    cout << "   number of different value for " <<split_attr << " : "<<int2string(NUM_PROTOCOL) << endl;
+    cout<<"   number of split value to try : "<<int2string(NUM_PROTOCOL)<<endl;
     for(int i=0;i<NUM_PROTOCOL;i++){
+      cout << "-----------------------------------"<<endl;
       string split_value = protocol_array[i];
-      int num_subset1 = db_helper->select_count("select count(id) from training_data where protocol_type < '"
-       + split_value + "' and id = ",ids);
-      int num_subset2 = db_helper->select_count("select count(id) from training_data where protocol_type >= '"
-       + split_value + "' and id = ",ids);
+      cout << "   split value = "<<split_value<<endl;
+      float num_subset1 = db_helper->select_count("select count(id) from training_data where protocol_type < '"
+       + split_value + "' and id in ",ids);
+      float num_subset2 = db_helper->select_count("select count(id) from training_data where protocol_type >= '"
+       + split_value + "' and id in ",ids);
+      cout<<"   sub-data set size1 : "<<int2string(num_subset1)<<endl;
+      cout<<"   sub-data set size2 : "<<int2string(num_subset2)<<endl;
       float gini1 = 1;
       for(int j=0;j<NUM_LABELS && num_subset1 > 0;j++){
         string sql = "select count(id) from training_data where protocol_type < '" + split_value +
-        "' and label = '"+LABEL_ARRAY[j]+"' and id = ";
+        "' and label = '"+LABEL_ARRAY[j]+"' and id in ";
         int num_label_in_subset1 = db_helper->select_count(sql,ids);
         gini1 -= (num_label_in_subset1 / num_subset1) * (num_label_in_subset1 / num_subset1);
       }
       float gini2 = 1;
       for(int j=0;j<NUM_LABELS && num_subset2 > 0;j++){
         string sql = "select count(id) from training_data where protocol_type >= '" + split_value +
-        "' and label = '"+LABEL_ARRAY[j]+"' and id = ";
+        "' and label = '"+LABEL_ARRAY[j]+"' and id in ";
         int num_label_in_subset2 = db_helper->select_count(sql,ids);
         gini2 -= (num_label_in_subset2 / num_subset2) * (num_label_in_subset2 / num_subset2);
       }
       float temp_gini = (num_subset1/ids.size())*gini1 + (num_subset2/ids.size()) * gini2;
+      cout << "   current gini = " <<double2string(temp_gini)<<endl;
+      cout<< "   min gini = "<<double2string(min_gini)<<endl;
       if(min_gini > temp_gini){
         min_gini = temp_gini;
         best_split_value = i;
@@ -267,26 +272,34 @@ list<float> calculate_gini(list<int> & ids,const string & split_attr){
     }
   }else if(split_attr == "service"){
     for(int i=0;i<NUM_SERVICE;i++){
+      cout << "   number of different value for " <<split_attr << " : "<<int2string(NUM_SERVICE) << endl;
+      cout<<"   number of split value to try : "<<int2string(NUM_SERVICE)<<endl;
+      cout << "-----------------------------------"<<endl;
       string split_value = service_array[i];
-      int num_subset1 = db_helper->select_count("select count(id) from training_data where service < '"
-       + split_value + "' and id = ",ids);
-      int num_subset2 = db_helper->select_count("select count(id) from training_data where service >= '"
-       + split_value + "' and id = ",ids);
+      cout << "   split value = "<<split_value<<endl;
+      float num_subset1 = db_helper->select_count("select count(id) from training_data where service < '"
+       + split_value + "' and id in ",ids);
+      float num_subset2 = db_helper->select_count("select count(id) from training_data where service >= '"
+       + split_value + "' and id in ",ids);
+      cout<<"   sub-data set size1 : "<<int2string(num_subset1)<<endl;
+      cout<<"   sub-data set size2 : "<<int2string(num_subset2)<<endl;
       float gini1 = 1;
       for(int j=0;j<NUM_LABELS && num_subset1 > 0;j++){
         string sql = "select count(id) from training_data where service < '" + split_value +
-        "' and label = '"+LABEL_ARRAY[j]+"' and id = ";
+        "' and label = '"+LABEL_ARRAY[j]+"' and id in ";
         int num_label_in_subset1 = db_helper->select_count(sql,ids);
         gini1 -= (num_label_in_subset1 / num_subset1) * (num_label_in_subset1 / num_subset1);
       }
       float gini2 = 1;
       for(int j=0;j<NUM_LABELS && num_subset2 > 0;j++){
         string sql = "select count(id) from training_data where service >= '" + split_value +
-        "' and label = '"+LABEL_ARRAY[j]+"' and id = ";
+        "' and label = '"+LABEL_ARRAY[j]+"' and id in ";
         int num_label_in_subset2 = db_helper->select_count(sql,ids);
         gini2 -= (num_label_in_subset2 / num_subset2) * (num_label_in_subset2 / num_subset2);
       }
       float temp_gini = (num_subset1/ids.size())*gini1 + (num_subset2/ids.size()) * gini2;
+      cout << "   current gini = " <<double2string(temp_gini)<<endl;
+      cout<< "   min gini = "<<double2string(min_gini)<<endl;
       if(min_gini > temp_gini){
         min_gini = temp_gini;
         best_split_value = i;
@@ -294,26 +307,34 @@ list<float> calculate_gini(list<int> & ids,const string & split_attr){
     }
   }else if(split_attr == "flag"){
     for(int i=0;i<NUM_FLAG;i++){
+      cout << "   number of different value for " <<split_attr << " : "<<int2string(NUM_FLAG) << endl;
+      cout<<"   number of split value to try : "<<int2string(NUM_FLAG)<<endl;
+      cout << "-----------------------------------"<<endl;
       string split_value = flag_array[i];
-      int num_subset1 = db_helper->select_count("select count(id) from training_data where flag < '"
-       + split_value + "' and id = ",ids);
-      int num_subset2 = db_helper->select_count("select count(id) from training_data where flag >= '"
-       + split_value + "' and id = ",ids);
+      cout << "   split value = "<<split_value<<endl;
+      float num_subset1 = db_helper->select_count("select count(id) from training_data where flag < '"
+       + split_value + "' and id in ",ids);
+      float num_subset2 = db_helper->select_count("select count(id) from training_data where flag >= '"
+       + split_value + "' and id in ",ids);
+      cout<<"   sub-data set size1 : "<<int2string(num_subset1)<<endl;
+      cout<<"   sub-data set size2 : "<<int2string(num_subset2)<<endl;
       float gini1 = 1;
       for(int j=0;j<NUM_LABELS && num_subset1 > 0;j++){
         string sql = "select count(id) from training_data where flag < '" + split_value +
-        "' and label = '"+LABEL_ARRAY[j]+"' and id = ";
+        "' and label = '"+LABEL_ARRAY[j]+"' and id in ";
         int num_label_in_subset1 = db_helper->select_count(sql,ids);
         gini1 -= (num_label_in_subset1 / num_subset1) * (num_label_in_subset1 / num_subset1);
       }
       float gini2 = 1;
       for(int j=0;j<NUM_LABELS && num_subset2 > 0;j++){
         string sql = "select count(id) from training_data where flag >= '" + split_value +
-        "' and label = '"+LABEL_ARRAY[j]+"' and id = ";
+        "' and label = '"+LABEL_ARRAY[j]+"' and id in ";
         int num_label_in_subset2 = db_helper->select_count(sql,ids);
         gini2 -= (num_label_in_subset2 / num_subset2) * (num_label_in_subset2 / num_subset2);
       }
       float temp_gini = (num_subset1/ids.size())*gini1 + (num_subset2/ids.size()) * gini2;
+      cout << "   current gini = " <<double2string(temp_gini)<<endl;
+      cout<< "   min gini = "<<double2string(min_gini)<<endl;
       if(min_gini > temp_gini){
         min_gini = temp_gini;
         best_split_value = i;
@@ -321,16 +342,7 @@ list<float> calculate_gini(list<int> & ids,const string & split_attr){
     }
   }else{
     list<float> values = db_helper->query_float_list("select DISTINCT "
-    + split_attr + " from training_data where id = ", ids);
-    //去重
-    set<float> different_values;
-    for(list<float>::iterator iter_values = values.begin();iter_values != values.end();++iter_values){
-      different_values.insert(*iter_values);
-    }
-    values.clear();
-    for(set<float>::iterator iter_values = different_values.begin();iter_values != different_values.end();++iter_values){
-      values.push_back(*iter_values);
-    }
+    + split_attr + " from training_data where id in ", ids);
     values.sort();
     cout << "   number of different value for " <<split_attr << " : "<<values.size() << endl;
 
@@ -339,41 +351,47 @@ list<float> calculate_gini(list<int> & ids,const string & split_attr){
     for(list<float>::iterator iter = values.begin(); iter != values.end(); ++iter){
       if(iter == values.begin())
         continue;
-      split_candidate.push_back((*iter * *last_iter)/2);
+      split_candidate.push_back((*iter + *last_iter)/2);
       last_iter = iter;
     }
     cout<<"   number of split value to try : "<<split_candidate.size()<<endl;
 
+    if(split_candidate.size() == 0){
+      cout <<"   no split value !" <<endl;
+      best_split_value = values.front();
+      result.push_back(best_split_value);
+      result.push_back(min_gini);
+      return result;
+    }
+
     for(list<float>::iterator iter = split_candidate.begin(); iter != split_candidate.end(); ++iter){
       float split_value = *iter;
-      ostringstream oss;
-      oss << split_value;
-      string split_value_in_string = oss.str();
-      oss.str("");
-      cout<<"   split value to try : "<<split_value_in_string<<endl;
-      int num_subset1 = db_helper->select_count("select count(id) from training_data where " + split_attr
-       + " < " + split_value_in_string + " and id = ",ids);
-      int num_subset2 = db_helper->select_count("select count(id) from training_data where " + split_attr
-       + " >= " + split_value_in_string + " and id = ",ids);
+      string split_value_in_string = double2string(split_value);
+      cout << "-----------------------------------"<<endl;
+      cout << "   split value = "<<split_value_in_string<<endl;
+      float num_subset1 = db_helper->select_count("select count(id) from training_data where " + split_attr
+       + " < " + split_value_in_string + " and id in ",ids);
+      float num_subset2 = db_helper->select_count("select count(id) from training_data where " + split_attr
+       + " >= " + split_value_in_string + " and id in ",ids);
       cout<<"   sub-data set size1 : "<<int2string(num_subset1)<<endl;
       cout<<"   sub-data set size2 : "<<int2string(num_subset2)<<endl;
       float gini1 = 1;
       for(int j=0;j<NUM_LABELS && num_subset1 > 0;j++){
         string sql = "select count(id) from training_data where " + split_attr + " < " + split_value_in_string +
-        " and label = '" + LABEL_ARRAY[j] + "' and id = ";
+        " and label = '" + LABEL_ARRAY[j] + "' and id in ";
         int num_label_in_subset1 = db_helper->select_count(sql,ids);
         gini1 -= (num_label_in_subset1 / num_subset1) * (num_label_in_subset1 / num_subset1);
       }
-      cout<<"   gini1 : "<<gini1<<endl;
       float gini2 = 1;
       for(int j=0;j<NUM_LABELS && num_subset2 > 0;j++){
         string sql = "select count(id) from training_data where " + split_attr + " >= " + split_value_in_string +
-        " and label = '" + LABEL_ARRAY[j] + "' and id = ";
+        " and label = '" + LABEL_ARRAY[j] + "' and id in ";
         int num_label_in_subset2 = db_helper->select_count(sql,ids);
         gini2 -= (num_label_in_subset2 / num_subset2) * (num_label_in_subset2 / num_subset2);
       }
-      cout<<"   gini2 : "<<gini2<<endl;
       float temp_gini = (num_subset1/ids.size())*gini1 + (num_subset2/ids.size()) * gini2;
+      cout << "   current gini = " <<double2string(temp_gini)<<endl;
+      cout<< "   min gini = "<<double2string(min_gini)<<endl;
       if(min_gini > temp_gini){
         min_gini = temp_gini;
         best_split_value = split_value;

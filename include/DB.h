@@ -24,9 +24,10 @@ class DB
         int select_count(const string & sql,list<int> & ids);
         string list2str(list<int> & ids);
         list<float> query_float_list(const string & sql, list<int> & ids);
-        map<string,string> select_map(string & sql);
+        map<string,string> select_map(const string & sql);
         int update(const string & sql);
-        string select_most(const string & sql,list<int> &ids);
+        string select_most(const string & sql,list<int> &ids,const string & sql_suffix);
+        int insert(const string & sql);
 
         sql::Connection * con;
 
