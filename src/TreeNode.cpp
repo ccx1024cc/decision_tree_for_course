@@ -52,9 +52,13 @@ TreeNode::TreeNode(int id_on_disk){
 
   if(this->left_child_id_on_disk != -1){
     this->left_child = new TreeNode(this->left_child_id_on_disk);
+  }else{
+    this->left_child = 0;
   }
   if(this->right_child_id_on_disk != -1){
     this->right_child = new TreeNode(this->right_child_id_on_disk);
+  }else{
+    this->right_child = 0;
   }
 }
 

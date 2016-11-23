@@ -36,7 +36,7 @@ TreeNode * prune(TreeNode * decision_tree){
 
 TreeNode * select_min_a_node(TreeNode * decision_tree){
   double min_a = 99999999;
-  TreeNode * result;
+  TreeNode * result = 0;
   list<TreeNode *> tree_stack;
   tree_stack.push_front(decision_tree);
   while(tree_stack.size() > 0){
@@ -77,24 +77,35 @@ void tree_delete(TreeNode * & sub_tree){
 
 TreeNode * choose_best_tree(list<TreeNode *> tree_set){
   list<TreeNode *> chosen_history;
-  for(int i=0;i<1;i++){
+  int turn = 10;
+  for(int i=0;i<turn;i++){
+    cout << "================================="<<endl;
+    cout << "turn " << int2string(i)<<endl;
     list<int> error; // 每一个树分错数量的集合
+    cout << "generating random data"<<endl;
     list<int> ids = generate_random_data(0.1);  // 只用十分之一的局部数据进行剪枝测试
     DB * db_helper = new DB();
+    int total = ids.size();
+    cout << "size of random data : "<<int2string(total)<<endl;
     for(list<TreeNode *>::iterator iter = tree_set.begin() ;iter != tree_set.end(); ++iter){
       int number_error = 0;
       for(list<int>::iterator iter_id = ids.begin();iter_id != ids.end(); ++iter_id){
-        string predict_label = predict(*iter, *iter_id);
+//        string predict_label = predict(*iter, *iter_id);
+        map<string,string> info = db_helper->select_map("select * from training_data where id = "
+            + int2string(*iter_id));
+
+        string predict_label = predict(*iter,info);
         string real_label = db_helper->query_string("select label from training_data where id = "
          + int2string(*iter_id));
         if(real_label != predict_label){
           number_error += 1;
         }
       }
+      cout << "number error : "<<int2string(number_error)<<endl;
+      cout << endl<<endl;
       error.push_back(number_error);
     }
 
-    int total = (int)(db_helper->select_count("select count(*) from training_data") *0.1);
     delete db_helper;
 
     int min_number_error = error.front();
@@ -105,7 +116,7 @@ TreeNode * choose_best_tree(list<TreeNode *> tree_set){
 
     float se = sqrt(min_number_error * (total - min_number_error) / total);
 
-    TreeNode * best_tree;
+    TreeNode * best_tree = 0;
     int min_number_leaf = INT_MAX;
     list<int>::iterator iter_error = error.begin();
     for(list<TreeNode *>::iterator iter_tree = tree_set.begin()
@@ -115,7 +126,7 @@ TreeNode * choose_best_tree(list<TreeNode *> tree_set){
         min_number_leaf = best_tree->number_leaf;
       }
     }
-
+    cout << "best tree " << best_tree->split_attr<<endl;
     chosen_history.push_back(best_tree);
   }
 
@@ -130,7 +141,7 @@ TreeNode * choose_best_tree(list<TreeNode *> tree_set){
   }
 
   int max_chosen_time = 0;
-  TreeNode * best_tree;
+  TreeNode * best_tree = 0;
   list<int>::iterator iter_chosen_time = chosen_times.begin();
   for(list<TreeNode *>::iterator iter_tree = tree_set.begin();
     iter_chosen_time != chosen_times.end(); ++iter_chosen_time,++iter_tree){

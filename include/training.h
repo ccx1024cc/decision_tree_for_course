@@ -4,12 +4,12 @@
 using namespace std;
 
 
-const int NUM_ATTR = 31;
-const string attr_array[] = {"duration","protocol_type","service"
-,"flag","src_bytes","dst_bytes","land","wrong_fragment","urgent","hot"
+const int NUM_ATTR = 25;
+const string attr_array[] = {"serror_rate","protocol_type","service"
+,"flag","land","wrong_fragment","urgent","hot"
 ,"num_failed_logins","logged_in","num_compromised","root_shell","su_attempted"
-,"num_root","num_file_creations","num_shells","num_access_files","num_outbound_cmds"
-,"is_host_login","is_guest_login","count","srv_count","serror_rate","srv_serror_rate"
+,"num_root","num_file_creations","num_shells","num_access_files"
+,"is_guest_login","count","srv_serror_rate"
 ,"rerror_rate","srv_rerror_rate","same_srv_rate","diff_srv_rate","srv_diff_host_rate"};
 
 

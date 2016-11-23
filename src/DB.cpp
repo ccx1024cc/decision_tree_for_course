@@ -22,6 +22,7 @@ DB::DB()
 
 DB::~DB()
 {
+    con->close();
     delete con;
 }
 
@@ -110,7 +111,7 @@ int DB::select_count(const string & sql,list<int> & ids){
   sql::Statement * st = con->createStatement();
   string sql_final = sql + list2str(ids);
   sql::ResultSet * rs = st->executeQuery(sql_final);
-  int result;
+  int result = 0;
   while(rs->next()){
     result = rs->getInt(1);
   }

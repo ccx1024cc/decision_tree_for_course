@@ -11,6 +11,9 @@
 
 using namespace std;
 
+int level = 0;
+int max_level = 8;
+
 /**
  * 训练的入口函数
  *
@@ -39,13 +42,16 @@ TreeNode * start_training(){
  *
  */
 TreeNode * start_training_process(list<int> & training_data, list<int> attr_index){
+  level ++;
   cout << "===========================================================================" << endl;
+  cout << "level " << int2string(level)<<endl;
   cout << "number of data : " << training_data.size() << " number of attribution : "
        << attr_index.size() << endl;
 
   //不存在数据
   if(training_data.size() == 0){
     cout << "no data in training data set,return NULL" << endl;
+    level -- ;
     return 0;
   }
 
@@ -66,12 +72,17 @@ TreeNode * start_training_process(list<int> & training_data, list<int> attr_inde
     cout << "   error of subtree : " << leaf->rt_subtree<<endl;
     cout << "   number of leaf : " <<leaf->number_leaf << endl;
     cout << "   return leaf : " << label <<endl;
+    level -- ;
     return leaf;
   }
   cout << "   not in same label" <<endl;
   //如果没有属性，则返回大多数类标签的节点
-  if(attr_index.size() == 0){
-    cout << "no attribution to split" << endl;
+  if(attr_index.size() == 0 || level >= max_level){
+    if(level >= 5){
+      cout << "level >= 5" << endl;
+    }else{
+      cout << "no attribution to split" << endl;
+    }
     cout << "searching the most label" << endl;
 
     DB * db_helper = new DB();
@@ -94,6 +105,7 @@ TreeNode * start_training_process(list<int> & training_data, list<int> attr_inde
     cout << "error of subtree : " << leaf->rt_subtree<<endl;
     cout << "number of leaf : " <<leaf->number_leaf << endl;
     cout << "return leaf : " << most_label << endl;
+    level --;
     return leaf;
   }
 
@@ -137,7 +149,16 @@ TreeNode * start_training_process(list<int> & training_data, list<int> attr_inde
   string sql2 = sql_base + " >= " + sql_value + " and id in ";
   list<int> sub_training_dataset1 = db_helper->query_int_list(sql1,training_data);
   list<int> sub_training_dataset2 = db_helper->query_int_list(sql2,training_data);
+
+  string sql = "select count(label),label from training_data where id in ";
+  string sql_suffix = " group by label";
+  string most_label = db_helper->select_most(sql,training_data,sql_suffix);
+
+  sql = "select count(*) from training_data where label != '" + most_label + "' and id in ";
+  int difference_label_number = db_helper->select_count(sql,training_data);
+  double total = db_helper->select_count("select count(*) from training_data");
   delete db_helper;
+  training_data.clear();
 
   //删除属性
   cout << "deleting attribution " << attr_array[best_attr_index] <<" from attribution set" << endl;
@@ -152,15 +173,6 @@ TreeNode * start_training_process(list<int> & training_data, list<int> attr_inde
   cout << "*************************************************************************"<<endl;
   cout << "error calculating" << endl;
   //统计误差
-  db_helper = new DB();
-  string sql = "select count(label),label from training_data where id in ";
-  string sql_suffix = " group by label";
-  string most_label = db_helper->select_most(sql,training_data,sql_suffix);
-
-  sql = "select count(*) from training_data where label != '" + most_label + "' and id in ";
-  int difference_label_number = db_helper->select_count(sql,training_data);
-  double total = db_helper->select_count("select count(*) from training_data");
-  delete db_helper;
 
   split_node->most_label = most_label;
   split_node->rt = difference_label_number/total;
@@ -182,6 +194,7 @@ TreeNode * start_training_process(list<int> & training_data, list<int> attr_inde
   cout << "number of leaf : " <<split_node->number_leaf << endl;
   cout << "cover error : " << double2string(split_node->a) << endl;
   cout << "return decision-node at attribution: " << split_node->split_attr << endl;
+  level --;
   return split_node;
 }
 
@@ -398,6 +411,7 @@ list<float> calculate_gini(list<int> & ids,const string & split_attr){
       }
     }
   }
+  delete db_helper;
   result.push_back(best_split_value);
   result.push_back(min_gini);
   return result;
